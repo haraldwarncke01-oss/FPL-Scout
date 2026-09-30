@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="da">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#101928">
+    <meta name="description" content="En enkel oversigt over Fantasy Premier League-spillere, priser, point og expected stats.">
+    <title>FPL Scout · Spillerdata</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="./" aria-label="FPL Scout forside"><span class="brand-mark">F</span><span>FPL <strong>Scout</strong></span></a>
+        <span class="topbar-tag">SÆSONENS SPILLERDATA</span>
+        <a class="topbar-link" href="https://fantasy.premierleague.com/" target="_blank" rel="noopener noreferrer">Åbn FPL <span aria-hidden="true">↗</span></a>
+      </header>
+
+      <main>
+        <section class="hero" aria-labelledby="hero-title">
+          <div class="hero-copy">
+            <div class="eyebrow"><span class="live-dot"></span> FANTASY PREMIER LEAGUE · DATAOVERSIGT</div>
+            <h1 id="hero-title">Find dit næste <em>FPL-pick.</em></h1>
+            <p>Sammenlign priser, point, form og underliggende tal for alle spillere. Start med et filter, og lad tallene hjælpe dig videre.</p>
+            <div class="hero-meta"><span id="updated">Henter data…</span><span class="meta-divider" aria-hidden="true"></span><span id="gameweek">Kampuge —</span></div>
+          </div>
+          <div class="hero-graphic" aria-hidden="true"><div class="graphic-ring ring-one"></div><div class="graphic-ring ring-two"></div><div class="graphic-center"><span>FPL</span><strong>SCOUT</strong></div><div class="graphic-orbit orbit-one"></div><div class="graphic-orbit orbit-two"></div></div>
+        </section>
+
+        <section class="stat-strip" aria-label="Overblik">
+          <div><span class="stat-label">SPILLERE</span><strong id="stat-players">—</strong><small>i den aktuelle FPL-database</small></div>
+          <div><span class="stat-label">HOLD</span><strong id="stat-teams">—</strong><small>Premier League-klubber</small></div>
+          <div><span class="stat-label">TOPSCORER</span><strong id="stat-leader">—</strong><small id="stat-leader-points">flest FPL-point</small></div>
+        </section>
+
+        <section class="board" aria-labelledby="board-title">
+          <div class="section-heading"><div><span class="section-kicker">01 / SPILLEROVERSIGT</span><h2 id="board-title">Udforsk spillerne</h2><p>Filtrér og sortér for at finde interessante valg til dit hold.</p></div><span id="result-count" class="result-count" aria-live="polite">— spillere</span></div>
+          <div class="filters">
+            <label class="search-wrap"><span class="sr-only">Søg efter spiller</span><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Søg efter spiller…" autocomplete="off"></label>
+            <label class="select-wrap"><span class="sr-only">Vælg position</span><select id="position"><option value="">Alle positioner</option><option value="GKP">Målmænd</option><option value="DEF">Forsvarere</option><option value="MID">Midtbanespillere</option><option value="FWD">Angribere</option></select></label>
+            <label class="select-wrap"><span class="sr-only">Vælg hold</span><select id="team"><option value="">Alle hold</option></select></label>
+            <label class="select-wrap sort-select"><span class="sr-only">Sortér efter</span><select id="sort"><option value="points">Flest point</option><option value="xgi90">Højeste xGI/90</option><option value="form">Bedste form</option><option value="ownership">Mest ejet</option><option value="price">Højeste pris</option><option value="name">Navn A–Å</option></select></label>
+          </div>
+          <div id="notice" class="notice" role="status" hidden></div>
+          <div class="table-scroll"><table><thead><tr><th scope="col">SPILLER</th><th scope="col">POS</th><th scope="col" class="numeric">PRIS</th><th scope="col" class="numeric">POINT</th><th scope="col" class="numeric">FORM</th><th scope="col" class="numeric"><abbr title="Expected goal involvements per 90 minutter">xGI/90</abbr></th><th scope="col" class="numeric">EJET</th><th scope="col">NÆSTE KAMP</th></tr></thead><tbody id="players"><tr><td colspan="8" class="empty-cell">Henter spillerdata…</td></tr></tbody></table></div>
+          <div class="table-footer"><span>Tal fra den officielle FPL-datakilde. xGI/90 kræver mindst 90 spillede minutter.</span><button id="show-more" type="button" hidden>Vis flere spillere <span aria-hidden="true">↓</span></button></div>
+        </section>
+
+        <aside class="about"><div class="about-icon">i</div><div><h2>Hvad betyder tallene?</h2><p><strong>Form</strong> er FPL’s seneste pointform. <strong>xGI/90</strong> er forventede mål og assists pr. 90 minutter. <strong>Ejet</strong> viser hvor stor en andel af FPL-holdene, der har spilleren. Næste kamp viser modstander og hjemme/ude.</p></div></aside>
+      </main>
+      <footer><span>FPL Scout · Et uafhængigt fanprojekt</span><span>Data: <a href="https://fantasy.premierleague.com/" target="_blank" rel="noopener noreferrer">Fantasy Premier League ↗</a></span></footer>
+    </div>
+  </body>
+</html>
