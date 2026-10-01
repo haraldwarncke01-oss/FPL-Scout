@@ -7,6 +7,20 @@ from fetch_fpl import build_snapshot, next_fixtures, historical_matches, current
 
 
 class SnapshotTests(unittest.TestCase):
+    def test_live_form_is_per_complete_gameweek_and_does_not_invent_xg(self):
+        player={"id":7,"team":1}
+        fixtures=[{"id":i,"finished":True,"kickoff_time":f"2026-09-0{i}T12:00:00Z","event":1,"team_h":1,"team_a":2} for i in (1,2)]
+        live={1:{"elements":[{"id":7,"stats":{"minutes":180,"total_points":6,"expected_goals":"0.40","expected_assists":"0.20","bonus":2},
+            "explain":[{"fixture":i,"stats":[{"identifier":"minutes","value":90,"points":2}]} for i in (1,2)]}]}}
+        result=player_minutes(player,fixtures,live)
+        self.assertEqual(len(result["recentGameweeks"]),1)
+        row=result["recentGameweeks"][0];self.assertEqual(row["fixtureCount"],2);self.assertEqual(row["minutes"],180)
+        self.assertEqual(row["points"],6);self.assertEqual(row["appearancePoints"],4);self.assertEqual(row["xG"],.4)
+        live[1]["elements"][0]["stats"].pop("expected_goals")
+        self.assertIsNone(player_minutes(player,fixtures,live)["recentGameweeks"][0]["xG"])
+        fixtures[1]["finished"]=False
+        self.assertEqual(player_minutes(player,fixtures,live)["recentGameweeks"],[])
+
     def test_next_fixture_and_player_mapping(self):
         bootstrap = {
             "teams": [

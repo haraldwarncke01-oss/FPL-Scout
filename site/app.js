@@ -53,7 +53,7 @@ function fits(p) {
 }
 function render() {
   if(!data)return;
-  const keys={forecast:p=>window.FPLPlanner.total(data,p.id,Number($('horizon').value)),avgMinutes:p=>p.minutesInfo?.avgMinutesPerMatch,expectedMinutes:p=>data.planning.forecasts[p.id]?.expectedMinutesPerMatch,peerGap:p=>scouting.get(p.id)?.peerGap,finishingGap:p=>scouting.get(p.id)?.finishingGap,
+  const keys={recentPoints:p=>data.planning.forecasts[p.id]?.recentForm?.last3Average,recentXGI:p=>{const f=data.planning.forecasts[p.id]?.recentForm;return f?.recentXG90!=null&&f?.recentXA90!=null?f.recentXG90+f.recentXA90:null;},forecast:p=>window.FPLPlanner.total(data,p.id,Number($('horizon').value)),avgMinutes:p=>p.minutesInfo?.avgMinutesPerMatch,expectedMinutes:p=>data.planning.forecasts[p.id]?.expectedMinutesPerMatch,peerGap:p=>scouting.get(p.id)?.peerGap,finishingGap:p=>scouting.get(p.id)?.finishingGap,
     xgi90:A.xgi90,xg90:p=>A.per90(p,'xG'),xa90:p=>A.per90(p,'xA'),points90:A.points90,
     defcon90:p=>A.per90(p,'defCon'),xgc90:p=>A.per90(p,'xGC'),cleanSheets:p=>num(p.cleanSheets),
     form:p=>num(p.form),ownership:p=>num(p.ownership),price:p=>num(p.price)};

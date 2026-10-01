@@ -102,11 +102,13 @@ def player_minutes(player, fixtures, live):
     live = live or {}
     found = {}
     player_events = set()
+    entries = {}
     for event_id, event in live.items():
         entry = next((row for row in event.get("elements", []) if row["id"] == player["id"]), None)
         if not entry:
             continue
         player_events.add(event_id)
+        entries[event_id] = entry
         for explanation in entry.get("explain", []):
             stats = {row["identifier"]: row for row in explanation.get("stats", [])}
             minute_stat = stats.get("minutes", {})
@@ -115,6 +117,8 @@ def player_minutes(player, fixtures, live):
                 "points": sum(row.get("points", 0) for row in stats.values()),
                 "dcPoints": stats.get("defensive_contribution", {}).get("points", 0),
                 "savePoints": stats.get("saves", {}).get("points", 0),
+                "appearancePoints": minute_stat.get("points", 0),
+                "bonusPoints": stats.get("bonus", {}).get("points", 0),
             }
     joined = (player.get("team_join_date") or "")[:10]
     logs = []
@@ -136,6 +140,31 @@ def player_minutes(player, fixtures, live):
     logs.sort(key=lambda row: (row["date"], row["fixture"]), reverse=True)
     known = [row for row in logs if row["minutes"] is not None]
     appearances = [row for row in known if row["minutes"] > 0]
+    gameweeks = []
+    for event_id in sorted({row["gameweek"] for row in known}, reverse=True):
+        rows = [row for row in known if row["gameweek"] == event_id]
+        relevant = [f for f in fixtures if f.get("event") == event_id and (
+            (player["team"] in (f["team_h"], f["team_a"]) and
+                (not joined or not f.get("kickoff_time") or f["kickoff_time"][:10] >= joined))
+            or found.get(f["id"], {}).get("minutes", 0) > 0)]
+        # A partial double GW is not a completed form observation.
+        if not relevant or any(not f.get("finished") for f in relevant):
+            continue
+        stats = entries[event_id].get("stats", {})
+        def optional(field):
+            raw = stats.get(field)
+            try:
+                return float(raw) if raw is not None else None
+            except (ValueError, TypeError):
+                return None
+        gameweeks.append({"gameweek": event_id, "fixtureCount": len(rows),
+            "minutes": stats.get("minutes", sum(row["minutes"] for row in rows)),
+            "points": stats.get("total_points", sum(row["points"] for row in rows)),
+            "xG": optional("expected_goals"), "xA": optional("expected_assists"),
+            "appearancePoints": sum(row.get("appearancePoints", 0) for row in rows),
+            "bonus": stats.get("bonus", sum(row.get("bonusPoints", 0) for row in rows)),
+            "dcPoints": sum(row.get("dcPoints", 0) for row in rows),
+            "savePoints": sum(row.get("savePoints", 0) for row in rows)})
     return {
         "last3": logs[:3], "appearances": len(appearances), "matchesKnown": len(known),
         "avgMinutes": round(sum(row["minutes"] for row in appearances) / len(appearances), 1) if appearances else None,
@@ -144,6 +173,8 @@ def player_minutes(player, fixtures, live):
         "sixtyRate": sum(row["minutes"] >= 60 for row in known) / len(known) if known else None,
         "dcPointsPerMatch": sum(row.get("dcPoints", 0) for row in known) / len(known) if known else None,
         "savePointsPerMatch": sum(row.get("savePoints", 0) for row in known) / len(known) if known else None,
+        "recentGameweeks": gameweeks[:5], "completedGameweeks": len(gameweeks),
+        "avgPointsPerGameweek": round(sum(row["points"] for row in gameweeks) / len(gameweeks), 2) if gameweeks else None,
     }
 
 

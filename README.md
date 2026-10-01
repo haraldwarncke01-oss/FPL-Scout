@@ -1,12 +1,12 @@
-# FPL Scout · version 4
+# FPL Scout · version 5
 
 En dansk GitHub Pages-side til FPL-scouting og holdplanlægning. Den viser tre anbefalinger på hver position, spilletid, lighed med topscorere, pointprognoser, lovlige 11/15-mandshold og betingede transfer- og chip-råd. Vælg denne GW, de næste 3 GW eller de næste 5 GW.
 
 ## Upload opdateringen til dit eksisterende GitHub-repository
 
-Version 4 gør dit eget FPL-hold og samlede transferplaner til en central del af siden. Har du allerede workflowet fra version 3, er det uændret: upload blot de nye projektfiler. Hvis du opgraderer fra en ældre version, skal workflowet installere SciPy som vist i `.github/workflows/pages.yml`.
+Version 5 viser din bedste lovlige start-11 og bænk i hver GW og vægter seneste form i prognoserne. Dit indtastede hold og økonomi fra version 4 bevares i samme browser. Har du allerede workflowet fra version 3, er det uændret: upload blot de nye projektfiler. Hvis du opgraderer fra en ældre version, skal workflowet installere SciPy som vist i `.github/workflows/pages.yml`.
 
-1. Pak `fpl-scout-v4-opdatering.zip` ud. Åbn den indre `fpl-scout`-mappe.
+1. Pak `fpl-scout-v5-opdatering.zip` ud. Åbn den indre `fpl-scout`-mappe.
 2. Gå til repositoryets **Code → Add file → Upload files**. Upload indholdet: mapperne `site`, `scripts`, `tests` samt filerne `requirements.txt` og `README.md`. Upload ikke den ydre `fpl-scout`-mappe, da filerne så havner et niveau for dybt. Bevar mappestrukturen og commit ændringerne.
 3. Har du allerede workflowet fra version 3, skal det ikke ændres. Hvis du opgraderer fra en ældre version: åbn **`.github` → `workflows` → `pages.yml` → Edit** på GitHub, og erstat indholdet med workflowet fra ZIP-filens `.github/workflows/pages.yml`. Den skjulte mappe kan vises med `Cmd + Shift + .` på Mac.
 4. Hvis `.github/workflows` endnu ikke findes: **Code → Add file → Create new file**. Skriv `.github/workflows/pages.yml` i filnavnet, kopier workflowets indhold ind og commit. Der er ingen nye afhængigheder i forhold til version 3.
@@ -18,6 +18,8 @@ Den første kørsel efter trin 2 kan fejle, hvis workflowet fra trin 3 endnu ikk
 ## Funktioner
 
 - **12 kandidater:** op til tre målmænd, forsvarere, midtbanespillere og angribere. Anbefalingerne genberegnes ved hver dataopdatering og reagerer på den valgte tidshorisont.
+- **Recent form:** seneste 3 GW-point, gennemsnit, median for seneste 5 og seneste vægtede xG/xA/90 sammen med sæsonens tal. Store enkeltuger begrænses i den lille formkorrektion.
+- **Din optimale start-11:** din egen startopstilling vises på en bane med formation, kaptajn, vice og fire bænkspillere. Skift GW, eller sammenlign før/efter en transferplan. Bænken tæller ikke i almindelige transfergevinster.
 - **Minutter:** gennemsnit når spilleren får spilletid, gennemsnit inklusive kampe med 0 minutter og minutter i de seneste tre afsluttede kampe. Nyeste kamp står først. Ukendte data vises som `—`, ikke 0.
 - **Forklarlig lighed:** konkret tabel med spillerens tal og op til tre statistisk nærliggende topscorere på samme position. Afstand, point/90, udvælgelse og skalaer vises.
 - **Pointprognose:** bidrag fra spilletid, mål, assists, clean sheets, bonus, defensive bidrag, redninger og fradrag for hver af de næste fem GW.
@@ -35,7 +37,7 @@ Den første kørsel efter trin 2 kan fejle, hvis workflowet fra trin 3 endnu ikk
 2. Søg efter dine spillere. Positionsfilter og tællere hjælper dig med at vælge 2 målmænd, 5 forsvarere, 5 midtbane og 3 angribere. Samme spiller kan kun vælges én gang, og der tillades højst tre fra en klub.
 3. Skriv bank i £m, fx `1.5`, og hvor mange gratis transfers du faktisk har tilbage. Vælg, om spillere skal vurderes over denne GW, de næste 3 eller de næste 5 GW.
 4. Sæt spillernes **salgsværdier fra FPL** i felterne ved holdet. Tomme felter bruger købsprisen som estimat. Salgsværdien kan være lavere end købsprisen, så den er nødvendig for præcis økonomi.
-5. Tryk **Find transferforslag**. Planen viser ændringer i kommende GW og forventet effekt over din valgte periode. Vælg et andet antal transfers i resultatets sammenligning for at se alternativer.
+5. Se **Dit hold · optimal start-11** og skift GW for at inspicere din opstilling og bænk. Spillere med markant formfald vises som opmærksomhedspunkter. Tryk **Find transferforslag**. Planen viser ændringer i kommende GW og forventet effekt over din valgte periode. Vælg et andet antal transfers i resultatets sammenligning for at se alternativer.
 6. Gennemfør selv de samlede transfers i FPL og opdatér derefter dit hold her. Siden foretager ingen ændringer på din FPL-konto.
 
 Forslagene genberegnes, når du trykker på knappen. Ændrer du hold, økonomi eller periode, fjernes de gamle forslag. Dit hold gemmes lokalt; chips markeres særskilt og kan være et alternativ til almindelige transfers.
@@ -46,7 +48,7 @@ Kandidater skal have mindst 50 forventede min/kamp og 75% tilgængelighed. Pr. p
 
 Vi afprøver både enkeltstående udskiftninger og kombinationer. En mellemregning må kræve en ekstra salgshandel for at frigøre penge eller plads i klubkvoten; hver færdig plan skal være betalelig samlet og overholde positioner, spillerunikhed og højst tre pr. klub. Alle udskiftninger sker i samme kommende GW. Spillerpriser og bank regnes i tiendedele af £m for at undgå afrundingsfejl.
 
-For hver plan vælger vi en lovlig start-11 og kaptajn i hver GW i perioden. Nettogevinst = nye holdpoint − holdpoint uden transfers − 4 × antal transfers ud over de gratis. Fradraget trækkes én gang i kommende GW. Ved under 2 forventede point i nettogevinst anbefales 0 transfers. De bedste afprøvede planer med 0, 1, 2 osv. vises som alternativer; algoritmen garanterer ikke en globalt optimal løsning.
+For hver plan vælger vi den bedste lovlige start-11 og kaptajn i hver GW i perioden. Vi summerer disse 11 spilleres point plus kaptajnens ekstra point. Fire bænkspillere giver 0 almindelige point, medmindre de starter i en senere GW. Derfor kan en dyr reservespiller godt få en lavere prognose uden automatisk at blive foreslået solgt. En billigere reserve kan dog finansiere en anden opgradering i en samlet plan. Nettogevinst = nye holdpoint − holdpoint uden transfers − 4 × antal transfers ud over de gratis. Fradraget trækkes én gang i kommende GW. Ved under 2 forventede point i nettogevinst anbefales 0 transfers. De bedste afprøvede planer med 0, 1, 2 osv. vises som alternativer; algoritmen garanterer ikke en globalt optimal løsning.
 
 Gratis transfers spares ikke automatisk for deres fremtidige værdi i modellen. Priser holdes faste, og der simuleres ingen fremtidige transfers eller autosubs. Planen beregner normal FPL-scoring med dobbelt kaptajn; chips vurderes i deres egen sektion. Tidligere data og pointprognoser er usikre, og skadesoplysninger bør kontrolleres tæt på deadline.
 
@@ -87,7 +89,11 @@ Kandidatkort kræver mindst 270 sæsonminutter, 50 forventede minutter pr. kamp 
 
 ### Point og hold
 
-Spillerens xG/xA pr. 90 trækkes mod positionens gennemsnit med 450 minutters vægt. For mål/assists justeres for eget holds hjemme-/udebaneangreb og modstanderens mål imod. Holdenes seneste op til ti kampe på den relevante bane trækkes mod ligaens gennemsnit med fem gennemsnitskampe. Clean-sheet-estimatet er `exp(-forventede mål imod)`; bonus, redninger og defensive point bruger historiske, omtrentlige gennemsnit. Straf for mål imod og kort medtages. Straffesparksredninger, selvmål og missede straffespark modelleres ikke særskilt.
+Sæsonens xG/xA pr. 90 trækkes mod positionens gennemsnit med 450 minutters vægt. Derefter kombineres disse sæsontal med seneste xG/xA: op til 60% seneste form og 40% sæson. Seneste tre afsluttede GW med holdkamp vægtes 50/30/20, nyeste først; en dobbelt-GW normaliseres pr. 90 minutter. For mål/assists justeres for eget holds hjemme-/udebaneangreb og modstanderens mål imod. Holdenes seneste op til ti kampe på den relevante bane trækkes mod ligaens gennemsnit med fem gennemsnitskampe. Clean-sheet-estimatet er `exp(-forventede mål imod)`. Bonus, redninger og defensive point kombinerer seneste observerede rater med sæsonens omtrentlige gennemsnit. Små stikprøver reducerer recent-vægten med `min(1, seneste minutter / 270, antal kendte GW / 3)`. Ukendte xG/xA bliver ikke behandlet som 0; vi bruger sæsonens estimat for de manglende målinger. Straf for mål imod og kort medtages. Straffesparksredninger, selvmål og missede straffespark modelleres ikke særskilt.
+
+En yderligere formkorrektion giver op til 20% vægt til seneste faktiske point ud over spilletid, normaliseret pr. 90. Hver observation begrænses til medianen i de seneste fem GW +/- 6 point/90, før den vægtes. Forventede spilletidspoint justeres ikke igen. Dette mindsker påvirkningen fra en enkelt 23-pointuge og bevarer et stort flertal af prognosen fra chanceproduktion, minutter og modstander. `FORM`-kolonnen i spilleranalysen viser korrektionen særskilt. Vægte og grænser er åbne heuristikker, som ikke er valideret på fremtidige resultater.
+
+Eksempel: 23 + 2 + 2 + 2 + 2 giver 6,2 pts/GW for sæsonen, mens seneste tre giver 2,0. Den gamle store uge tæller stadig i den forsigtigt vægtede sæsonhistorik, men indgår ikke direkte i de seneste tre GW. Hvis spilleren fortsat har gode aktuelle xG/xA og en let kommende modstander, kan det stadig være korrekt at beholde ham. Et formfald udløser ikke automatisk et salg uden en forbedring af start-11 eller en nyttig samlet budgetændring.
 
 FPL-pointreglerne følger den aktuelle 2026/27-sæson, inklusive 10 point for mål fra en målmand. Regler og chip-vinduer kan ændres mellem sæsoner og skal kontrolleres ved sæsonskift. Se [FPL-reglerne](https://fantasy.premierleague.com/help/rules).
 
@@ -113,7 +119,7 @@ Wildcard/Free Hit sammenlignes med £100m-holdet før gratis transfers/pointfrad
 ```text
 .github/workflows/pages.yml   Python, data, tests og GitHub Pages
 requirements.txt             SciPy og dens NumPy-afhængighed
-scripts/fetch_fpl.py          Data og kampminutter
+scripts/fetch_fpl.py          Data, kampminutter og live xG/xA pr. GW
 scripts/planning.py           Prognoser og MILP-holdplaner
 site/index.html               Sideindhold
 site/styles.css               Design og mobilvisning

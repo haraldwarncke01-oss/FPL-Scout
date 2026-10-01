@@ -6,6 +6,7 @@
   const labels={GKP:'Målmænd',DEF:'Forsvarere',MID:'Midtbane',FWD:'Angribere'};
   let data,selectPlayer,refresh,players,teams,optionPlayers=new Map(),state={ids:[],sales:{},bank:0,freeTransfers:1,chips:{},previousFreeHit:false,transferHorizon:3,allowHit:false,example:false};
   let worker=null,runId=0,running=false,lastResult=null,lastKey='',selectedCount=0;
+  let ownWeek=null,resultWeek=null,resultView='after';
   const horizon=()=>Math.min(Number($('horizon').value),data.planning.events.length);
   const currentPlan=()=>data.planning.plans[$('squad-mode').value==='benchboost'?'benchboost':$('horizon').value];
   const ownPlayers=()=>state.ids.map(id=>players.get(id)).filter(Boolean);
@@ -62,7 +63,23 @@
     const p=players.get(id),f=P.forecast(data,id,lineup.gameweek),b=el('button','pitch-player'+(lineup.captain===id?' captain':''));b.type='button';
     b.append(el('span','shirt-number',teams.get(p.teamId)?.shortName??''),el('strong','',p.name+(lineup.captain===id?' · C':'')),
       el('span','pitch-points',fmt(f?.points)+' pts · £'+fmt(p.price)+'m'),el('small','',f?.fixtures.map(x=>(teams.get(x.opponent)?.shortName??'?')+(x.home?' H':' U')).join(' / ')||'Blank GW'));
+    const recent=data.planning.forecasts[id]?.recentForm?.last3Points;
+    if(recent?.length)b.append(el('small','pitch-form','Seneste '+recent.length+' GW: '+recent.join(' / ')));
     b.addEventListener('click',()=>selectPlayer(id));return b;
+  }
+  function personalLineup(title,lineup){
+    const card=el('section','personal-lineup'),order=P.benchOrder(data,lineup);
+    const formation=['DEF','MID','FWD'].map(pos=>lineup.starters.filter(id=>players.get(id).position===pos).length).join('–');
+    card.append(el('h4','',title),el('p','lineup-meta',formation+' · '+fmt(lineup.points)+' forventede point fra start-11 inkl. dobbelt kaptajn'),
+      el('p','detail-copy','Kaptajn: '+players.get(lineup.captain).name+' · Vice: '+players.get(order.vice).name));
+    const pitch=el('div','pitch personal-pitch');
+    for(const pos of P.positions){const row=el('div','pitch-row');for(const id of lineup.starters.filter(id=>players.get(id).position===pos))row.append(pitchCard(id,lineup));pitch.append(row);}
+    card.append(pitch,el('p','bench-title','Bænk · tæller ikke i prognosen for en normal GW. Forslag til rækkefølge:'));
+    const bench=el('div','bench-players personal-bench');
+    for(const [index,id] of order.outfield.entries()){const item=el('div','bench-slot');item.append(el('span','',String(index+1)),pitchCard(id,lineup));bench.append(item);}
+    if(order.goalkeeper){const item=el('div','bench-slot');item.append(el('span','','Reserve-GK'),pitchCard(order.goalkeeper,lineup));bench.append(item);}
+    card.append(bench,el('p','method-note','Bedste lovlige start-11 blandt dine 15 med modellens pointprognoser. Autosubs og vice ved kaptajnfravær er ikke indregnet. Bænkrækkefølgen sorteres på prognosen; FPL skal også kunne bevare en lovlig formation ved indskiftning.'));
+    return card;
   }
   function renderSquad(){
     const plan=currentPlan(),lineup=plan.lineups?.find(l=>l.gameweek===Number($('lineup-week').value))??plan.lineups?.[0];
@@ -113,15 +130,29 @@
     if(!data.planning.events.length)box.append(el('p','detail-copy','Ingen kommende gameweek registreret.'));
     else if(error)box.append(el('p','detail-copy',error));
     else{
-      const gw=data.planning.events[0],lineup=P.bestXI(data,own,gw),headline=el('div','own-lineup');headline.append(el('h3','','Dit hold · GW '+gw),
-        el('p','detail-copy',fmt(lineup.points)+' forventede point med '+players.get(lineup.captain).name+' som kaptajn · '+fmt(P.horizonScore(data,own,ownHorizon()))+' over '+ownHorizon()+' GW før transfers.'));
-      for(const pos of P.positions){const line=el('div','own-position-line');line.append(el('span','position-pill',pos));for(const id of lineup.starters.filter(id=>players.get(id).position===pos))line.append(playerLink(id));headline.append(line);}
-      headline.append(el('p','method-note','Bænk: '+lineup.bench.map(id=>players.get(id).name).join(', ')+'.'));
+      if(!data.planning.events.includes(ownWeek))ownWeek=data.planning.events[0];
+      const lineup=P.bestXI(data,own,ownWeek),headline=el('div','own-lineup'),heading=el('div','own-lineup-heading');
+      heading.append(el('h3','','Dit hold · optimal start-11'));
+      const label=el('label','','Se gameweek'),select=el('select');select.setAttribute('aria-label','Gameweek for dit optimale hold');
+      for(const gw of data.planning.events){const o=el('option','','GW '+gw);o.value=gw;select.append(o);}select.value=ownWeek;
+      select.addEventListener('change',()=>{ownWeek=Number(select.value);renderOwnAnalysis();});label.append(select);heading.append(label);headline.append(heading,
+        personalLineup('Startopstilling · GW '+ownWeek,lineup),el('p','method-note',fmt(P.horizonScore(data,own,ownHorizon()))+' forventede holdpoint over '+ownHorizon()+' GW fra kommende GW, uden transfers.'));
       box.append(headline);
       const summary=el('div','own-budget-card');summary.append(el('h3','','Din økonomi'),el('strong','','£'+fmt(state.bank)+'m i banken'),
         el('p','detail-copy',state.freeTransfers+' gratis transfer'+(state.freeTransfers===1?'':'s')+' · vurderer de næste '+ownHorizon()+' GW.'),
         el('p','method-note','Holdet gemmes her i browseren. Brug navnene på dine faktiske spillere og deres salgsværdier fra FPL.'));
       box.append(summary);
+      const watch=own.filter(p=>{const f=data.planning.forecasts[p.id]?.recentForm;return p.price>=8&&f?.last3Points?.length===3&&f.seasonAverage-f.last3Average>=1.5;})
+        .sort((a,b)=>{const x=data.planning.forecasts[a.id].recentForm,y=data.planning.forecasts[b.id].recentForm;return (y.seasonAverage-y.last3Average)-(x.seasonAverage-x.last3Average);});
+      if(watch.length){const section=el('div','form-watch');section.append(el('h3','','Formfald på dit hold · vurder nærmere'));
+        for(const p of watch){const f=data.planning.forecasts[p.id].recentForm,card=el('div','form-watch-card');card.append(playerLink(p.id),
+          el('span','','£'+fmt(p.price)+'m · seneste 3 GW: '+f.last3Points.join(' / ')+' pts'),
+          el('p','detail-copy',fmt(f.last3Average)+' pts/GW senest mod '+fmt(f.seasonAverage)+' i sæsonens afsluttede GW med holdkamp.'));
+          const recentGI=(f.recentXG90??0)+(f.recentXA90??0),seasonGI=f.seasonXG90+f.seasonXA90;
+          card.append(el('small','',f.recentXG90==null||f.recentXA90==null?'Seneste xG/xA mangler; pointene alene afgør ikke et salg.':
+            'Seneste vægtede xGI/90: '+fmt(recentGI,2)+' · sæson: '+fmt(seasonGI,2)+'. '+(recentGI<.8*seasonGI?'Chanceproduktionen er også lavere.':'Chanceproduktionen kan stadig tale for at beholde spilleren.')));section.append(card);
+        }section.append(el('p','method-note','Viser spillere til mindst £8m med tre kendte GW og mindst 1,5 færre pts/GW end sæsongennemsnittet. Dette er opmærksomhedspunkter; transferforslaget afhænger af din start-11, modstandere, budget og alternativer.'));box.append(section);
+      }
     }
     const invalid=error||financeError()||(!data.planning.events.length?'Ingen kommende gameweek registreret.':null),key=transferKey();
     if(invalid||key!==lastKey){if(running)stopSearch();lastResult=null;$('transfer-results').replaceChildren();lastKey=key;}
@@ -144,6 +175,7 @@
       worker?.terminate();worker=null;running=false;$('calculate-transfers').disabled=false;
       if(error||result?.error){$('transfer-status').textContent='Beregningen kunne ikke gennemføres: '+(error||result.error);return;}
       lastResult=result;lastKey=key;selectedCount=result.recommended.count;
+      resultWeek=result.events[0];resultView='after';
       $('transfer-status').textContent=fmt(result.evaluated,0)+' kombinationer afprøvet · '+result.horizon+' GW.';renderTransferResults();
     };
     const local=()=>setTimeout(()=>{if(generation!==runId)return;try{done(P.transferPlans(data,ownPlayers(),payload.horizon,payload.bank,payload.sales,payload.options));}catch(e){done(null,e.message);}},0);
@@ -164,6 +196,16 @@
     for(const alternative of result.alternatives){const option=el('option','',(alternative.count===0?'0 · gem transfers':alternative.count+' transfer'+(alternative.count===1?'':'s'))+
       ' · '+(alternative.netGain>=0?'+':'')+fmt(alternative.netGain)+' pts'+(alternative.hit?' · -'+alternative.hit+' fradrag':'')+(alternative.count===result.recommended.count?' · anbefalet':''));option.value=alternative.count;select.append(option);}
     select.value=plan.count;select.addEventListener('change',()=>{selectedCount=Number(select.value);renderTransferResults();});picker.append(select);header.append(intro,picker);container.append(header);
+    if(plan.count===0){
+      const alternative=result.alternatives.filter(p=>p.count>0).sort((a,b)=>b.netGain-a.netGain||a.count-b.count)[0];
+      if(alternative){const summary=el('div','keep-explanation');summary.append(el('h4','','Hvorfor gemme transfers?'),
+        el('p','detail-copy','Bedste afprøvede ændring: '+alternative.moves.map(m=>players.get(m.out).name+' → '+players.get(m.incoming).name).join(', ')+
+          '. Nettogevinst: '+(alternative.netGain>=0?'+':'')+fmt(alternative.netGain)+' point. Bank efter: £'+fmt(alternative.bankAfter)+'m.'));
+        if(alternative.moves.every(m=>result.beforeLineups.every(l=>!l.starters.includes(m.out))&&alternative.lineups.every(l=>!l.starters.includes(m.incoming))))summary.append(el('p','detail-copy',
+          'De berørte spillere er på bænken i hele perioden i begge opstillinger. Skiftet forbedrer derfor ikke dine start-11-point. Den frigjorte bank kan være nyttig til en senere transfer, som modellen ikke planlægger.'));
+        container.append(summary);
+      }
+    }
     if(state.example)container.append(el('p','result-caution','Dette er et eksempelhold. Indtast dit faktiske hold for at få personlige forslag.'));
     if(plan.estimatedSales)container.append(el('p','result-caution','Nogle salgsværdier er estimeret fra købsprisen. Indtast de rigtige salgsværdier fra FPL og beregn igen for at kontrollere økonomien.'));
     const overview=el('div','transfer-overview');for(const [label,value] of [['BANK NU','£'+fmt(result.bank)+'m'],['BANK EFTER','£'+fmt(plan.bankAfter)+'m'],['GRATIS TILBAGE',String(plan.freeTransfersLeft)],['POINTFRADRAG',plan.hit?'-'+plan.hit:'0']]){
@@ -182,7 +224,10 @@
       else if((newForecast?.expectedMinutesPerMatch??0)>(oldForecast?.expectedMinutesPerMatch??0)+15)reason='Mere forventet spilletid i den kommende periode.';
       else if(!(oldForecast?.events[0]?.fixtureCount??0)&&(newForecast?.events[0]?.fixtureCount??0))reason='Giver en kamp i kommende GW, hvor den nuværende spiller har blankt GW.';
       card.append(el('p','detail-copy',reason),el('p','move-stats','Spillerprognose: '+fmt(oldPoints)+' → '+fmt(newPoints)+' pts / '+result.horizon+' GW. '+
-        'Forventede minutter/kamp: '+fmt(oldForecast?.expectedMinutesPerMatch,0)+' → '+fmt(newForecast?.expectedMinutesPerMatch,0)+'.'));moves.append(card);
+        'Forventede minutter/kamp: '+fmt(oldForecast?.expectedMinutesPerMatch,0)+' → '+fmt(newForecast?.expectedMinutesPerMatch,0)+'.'),
+        el('p','move-starts','Start-11: '+result.beforeLineups.filter(l=>l.starters.includes(move.out)).length+'/'+result.horizon+' GW for spilleren ud → '+plan.lineups.filter(l=>l.starters.includes(move.incoming)).length+'/'+result.horizon+' GW for spilleren ind.'));
+      const recentOut=oldForecast?.recentForm?.last3Points,recentIn=newForecast?.recentForm?.last3Points;
+      if(recentOut?.length||recentIn?.length)card.append(el('p','move-stats','Seneste 3 GW-point: '+(recentOut?.join(' / ')||'—')+' → '+(recentIn?.join(' / ')||'—')+'.'));moves.append(card);
     }container.append(moves);
     if(plan.count===0&&result.maxMoves===0)container.append(el('p','method-note','Du har 0 gratis transfers. Du kan markere muligheden for én ekstra transfer med 4 point i fradrag for at afprøve et point-hit.'));
     const scroll=el('div','table-scroll'),table=el('table','transfer-impact'),thead=el('thead'),tr=el('tr');
@@ -193,6 +238,16 @@
     }table.append(tbody);scroll.append(table);container.append(scroll,
       el('p','method-note','¹ Inkl. dobbelt kaptajn; eventuelt pointfradrag trækkes én gang i den kommende GW. Spillerprognoserne på kortene kan ikke lægges direkte sammen til holdgevinsten, fordi startopstilling og kaptajn også ændres.'),
       el('p','method-note','Planen bruger '+plan.count+' transfers nu. Med almindelig opsparing vil du have '+plan.freeTransfersNextGW+' gratis transfers ved næste GW. Hele planen skal bekræftes samlet i FPL; den udfører ingen transfers på din konto. Opdatér dit hold her, når du har gennemført ændringerne.'));
+    const controls=el('div','result-lineup-controls');
+    const weekLabel=el('label','','Se opstilling i'),weekSelect=el('select');weekSelect.setAttribute('aria-label','Gameweek for transferopstilling');
+    for(const gw of result.events){const o=el('option','','GW '+gw);o.value=gw;weekSelect.append(o);}if(!result.events.includes(resultWeek))resultWeek=result.events[0];weekSelect.value=resultWeek;
+    weekSelect.addEventListener('change',()=>{resultWeek=Number(weekSelect.value);renderTransferResults();});weekLabel.append(weekSelect);
+    const viewLabel=el('label','','Sammenlign'),viewSelect=el('select');viewSelect.setAttribute('aria-label','Opstilling før eller efter transfers');
+    for(const [value,text] of [['after','Efter denne plan'],['before','Uden transfers']]){const o=el('option','',text);o.value=value;viewSelect.append(o);}viewSelect.value=resultView;
+    viewSelect.addEventListener('change',()=>{resultView=viewSelect.value;renderTransferResults();});viewLabel.append(viewSelect);controls.append(weekLabel,viewLabel);container.append(controls);
+    const lineup=(resultView==='after'?plan.lineups:result.beforeLineups).find(l=>l.gameweek===resultWeek);
+    container.append(personalLineup((resultView==='after'?'Start-11 efter planen':'Start-11 uden transfers')+' · GW '+resultWeek,lineup));
+    if(resultView==='after'&&resultWeek===result.events[0]&&plan.hit)container.append(el('p','method-note','Opstillingen viser spillerpoint. I GW '+resultWeek+' er holdets netto '+fmt(lineup.points-plan.hit)+' point efter '+plan.hit+' i transferfradrag.'));
   }
   function recommendations(scouting){
     const container=$('opportunity-cards');container.replaceChildren();
@@ -210,6 +265,7 @@
           el('strong','card-name',p.name),el('span','card-main',fmt(P.total(data,p.id,horizon()))+' forventede pts'),
           el('span','card-sub',horizon()+' GW · '+fmt(f.expectedMinutesPerMatch,0)+' forventede min/kamp'),
           el('span','card-sub','Sidste 3: '+(p.minutesInfo?.last3.map(x=>x.minutes??'—').join(' / ')||'—')+' min'),
+          el('span','card-sub','Seneste 3 GW: '+(f.recentForm?.last3Points?.join(' / ')||'—')+' pts'),
           el('span','card-sub','Gab: '+(s?.peerGap==null?'—':(s.peerGap>=0?'+':'')+fmt(s.peerGap,2))+' pts/90'),
           el('span','card-sub',high?'Tæt på '+high.name+' · afstand '+fmt(high.distance,2):'Ingen tæt topscorer inden for afstand 2,25'),el('span','card-link','Se tal & begrundelse ↗'));
         card.addEventListener('click',()=>selectPlayer(p.id));group.append(card);
@@ -219,6 +275,17 @@
   }
   function addPlayerDetails(panel,p,scout){
     const info=p.minutesInfo??{},f=data.planning.forecasts[p.id],block=el('div','detail-block');block.append(el('h3','','Spilletid & næste fem gameweeks'));
+    const form=f?.recentForm;
+    if(form){const summary=el('div','recent-form-summary');summary.append(el('h4','','Seneste form · nyeste GW først'));
+      const metrics=el('div','form-metrics');const xgi=form.recentXG90==null||form.recentXA90==null?null:form.recentXG90+form.recentXA90;
+      for(const [label,value] of [['POINT I SENESTE 3 GW',form.last3Points.join(' / ')||'—'],['PTS/GW · SENESTE 3',fmt(form.last3Average)],['PTS/GW · SÆSON',fmt(form.seasonAverage)],['MEDIAN · SENESTE 5',fmt(form.last5Median)],['xGI/90 · SENESTE',fmt(xgi,2)],['xGI/90 · SÆSON',fmt(form.seasonXG90+form.seasonXA90,2)]]){
+        const metric=el('div','detail-metric');metric.append(el('span','stat-label',label),el('strong','',value));metrics.append(metric);
+      }summary.append(metrics);
+      const rows=el('div','recent-gw-list');for(const gw of form.gameweeks){const item=el('div','recent-gw');item.append(el('strong','','GW '+gw.gameweek+' · '+gw.points+' pts'),
+        el('span','',gw.minutes+' min · '+gw.fixtureCount+' kamp'+(gw.fixtureCount===1?'':'e')),
+        el('small','','xG '+fmt(gw.xG,2)+' · xA '+fmt(gw.xA,2)));rows.append(item);}summary.append(rows,
+        el('p','method-note','Der bruges afsluttede GW med holdkamp; en dobbelt-GW tæller som én GW, og xG/xA normaliseres pr. 90 minutter. Ukendte stats bliver ikke til 0. Seneste xG/xA og bonus vægtes op til 60%, sæsonen 40%. En formkorrektion giver op til 20% vægt til seneste point ud over spilletid; enkelte store pointuger begrænses i forhold til medianen. Små stikprøver reducerer vægten.'));block.append(summary);
+    }
     const metrics=el('div','detail-metrics');for(const [label,value] of [['MIN/KAMP · INKL. 0',fmt(info.avgMinutesPerMatch)],['MIN NÅR HAN SPILLER',fmt(info.avgMinutes)],['FORVENTET MIN/KAMP',fmt(f?.expectedMinutesPerMatch)]]){
       const box=el('div','detail-metric');box.append(el('span','stat-label',label),el('strong','',value));metrics.append(box);
     }block.append(metrics,el('p','method-note','Sæsongennemsnit: '+(info.matchesKnown??0)+' holdkampe med kendte data, '+(info.appearances??0)+' med spilletid. Sidste tre vises nyeste først; 0 er en kamp uden spilletid, — er ukendt.'));
@@ -226,12 +293,12 @@
       item.append(el('strong','',(match.minutes??'—')+' min'),el('span','','GW '+match.gameweek+' · '+(teams.get(match.opponent)?.shortName??'Tidligere klub')+(match.home==null?'':match.home?' (H)':' (U)')),
         el('small','muted',match.date?new Date(match.date).toLocaleDateString('da-DK'):''));recent.append(item);}block.append(recent);
     const wrap=el('div','table-scroll'),table=el('table','forecast-table'),head=el('thead'),tr=el('tr');
-    for(const label of ['GW','MODSTANDER','MIN','POINT','SPILLETID','MÅL','ASSISTS','CS','BONUS','DEF.','REDN.','FRADRAG'])tr.append(el('th','',label));head.append(tr);table.append(head);
+    for(const label of ['GW','MODSTANDER','MIN','POINT','SPILLETID','MÅL','ASSISTS','CS','BONUS','DEF.','REDN.','FRADRAG','FORM'])tr.append(el('th','',label));head.append(tr);table.append(head);
     const body=el('tbody');for(const event of f?.events??[]){const row=el('tr'),c=event.components;
       const values=['GW '+event.gameweek,event.fixtures.map(x=>teams.get(x.opponent)?.shortName+(x.home?' (H)':' (U)')).join(' / ')||'Blank',fmt(event.minutes,0),fmt(event.points,2),
-        ...['appearance','goals','assists','cleanSheet','bonus','defensive','saves','deductions'].map(key=>fmt(c[key],2))];
+        ...['appearance','goals','assists','cleanSheet','bonus','defensive','saves','deductions','recentForm'].map(key=>fmt(c[key],2))];
       for(const value of values)row.append(el('td','',value));body.append(row);
-    }table.append(body);wrap.append(table);block.append(wrap,el('p','method-note','Forventede minutter = 75% af sidste tre kendte kampes vægtede minutter (50/30/20) + 25% af sæsongennemsnittet inklusive 0, ganget med FPL’s tilgængelighed. Pointkolonnerne er modellens bidrag pr. GW.'));
+    }table.append(body);wrap.append(table);block.append(wrap,el('p','method-note','Forventede minutter = 75% af sidste tre kendte kampes vægtede minutter (50/30/20) + 25% af sæsongennemsnittet inklusive 0, ganget med FPL’s tilgængelighed. Pointkolonnerne er modellens bidrag pr. GW. FORM viser ændringen fra seneste realiserede point; den kan være negativ.'));
     block.append(el('p','method-note','Ved klubskifte kan kampe uden spilletid fra en tidligere klub mangle i gennemsnittet.'));
     panel.append(block);
     const comp=el('div','detail-block');comp.append(el('h3','','Hvor tæt er tallene på topscorerne?'));

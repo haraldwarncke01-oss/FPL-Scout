@@ -28,6 +28,12 @@
     return best;
   }
   function horizonScore(data,players,h){return data.planning.events.slice(0,h).reduce((sum,gw)=>sum+(bestXI(data,players,gw)?.points??0),0);}
+  function benchOrder(data,lineup){
+    const byId=new Map(data.players.map(p=>[p.id,p]));
+    const outfield=lineup.bench.filter(id=>byId.get(id).position!=='GKP').sort((a,b)=>points(data,b,lineup.gameweek)-points(data,a,lineup.gameweek)||a-b);
+    return {outfield,goalkeeper:lineup.bench.find(id=>byId.get(id).position==='GKP'),
+      vice:lineup.starters.filter(id=>id!==lineup.captain).sort((a,b)=>points(data,b,lineup.gameweek)-points(data,a,lineup.gameweek)||a-b)[0]};
+  }
   function bestTransfer(data,players,h,bank=0,saleValues={}){
     if(validateSquad(players))return null;
     const current=horizonScore(data,players,h),owned=new Set(players.map(p=>p.id));
@@ -189,5 +195,5 @@
     for(const row of candidates.slice(1)){row.use=false;row.status='Alternativ';row.text+=' Kun én chip pr. GW; modellen prioriterer '+candidates[0].name+'.';}
     return advice;
   }
-  return {positions,quotas,points,total,forecast,validateSquad,bestXI,horizonScore,bestTransfer,transferPlans,chipAdvice};
+  return {positions,quotas,points,total,forecast,validateSquad,bestXI,horizonScore,benchOrder,bestTransfer,transferPlans,chipAdvice};
 });

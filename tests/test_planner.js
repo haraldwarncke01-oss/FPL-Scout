@@ -49,6 +49,19 @@ function transferFixture(){
   context.onmessage({data:{data:f.data,ids:f.own.map(p=>p.id),horizon:3,bank:0,sales:{},options:{freeTransfers:2}}});
   assert.equal(reply.result.recommended.count,2,'Worker must load planner and return a funded plan');
 }
+{
+  const f=transferFixture(),mainGK=f.own[0],reserve=f.own[1];
+  f.data.players=f.own.concat({id:103,name:'Better reserve GK',position:'GKP',teamId:30,price:4,canSelect:true});
+  for(const event of f.data.planning.forecasts[mainGK.id].events)event.points=8;
+  for(const event of f.data.planning.forecasts[reserve.id].events)event.points=0;
+  f.data.planning.forecasts[103]={expectedMinutesPerMatch:90,availability:1,events:[6,7,8].map(gameweek=>({gameweek,points:3,fixtureCount:1}))};
+  const result=P.transferPlans(f.data,f.own,3,0,{}, {freeTransfers:1});
+  assert.equal(result.recommended.count,0,'A better unused bench keeper adds no starting-XI points');
+  assert.equal(result.alternatives.find(p=>p.count===1).grossGain,0);
+  const after=result.alternatives.find(p=>p.count===1).lineups[0];assert.equal(after.starters.length,11);assert.equal(after.bench.length,4);
+  assert.ok(after.bench.includes(103));assert.ok(!after.starters.includes(103));
+  const order=P.benchOrder(f.data,after);assert.equal(order.outfield.length,3);assert.equal(order.goalkeeper,103);assert.ok(after.starters.includes(order.vice));
+}
 for(const plan of Object.values(data.planning.plans)){
   if(!plan.squad){assert.equal(plan.status,'unavailable');continue;}
   assert.equal(P.validateSquad(plan.squad.map(id=>byId.get(id))),null);
