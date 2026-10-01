@@ -52,9 +52,18 @@
         ? comparable.reduce((sum, item) => sum + points90(item.player), 0) / comparable.length : null;
       const xgi = xgi90(player);
       const actual = actualGI90(player);
+      const positionPool = byPosition.get(player.position) || [];
+      const pointRates = positionPool.map(points90).sort((a, b) => a-b);
+      const highThreshold = pointRates[Math.floor((pointRates.length-1)*0.75)];
+      const highScorers = positionPool.filter(other => other.id !== player.id && points90(other) >= highThreshold)
+        .map(other => ({ player: other, distance: distance(player, other) }))
+        .filter(item => Number.isFinite(item.distance) && item.distance <= 2.25)
+        .sort((a,b) => a.distance-b.distance).slice(0,3);
       return [player.id, {
         eligible: baseline !== null,
         peers: comparable.map(item => ({ id: item.player.id, name: item.player.name, points90: points90(item.player), distance: item.distance })),
+        highScorers: highScorers.map(item => ({ id: item.player.id, name: item.player.name, points90: points90(item.player), distance: item.distance })),
+        highThreshold,
         peerGap: baseline === null ? null : baseline - points90(player),
         peerPoints90: baseline,
         finishingGap: xgi === null || actual === null ? null : xgi - actual,
@@ -93,5 +102,5 @@
     };
   }
 
-  return { MIN_MINUTES, per90, points90, xgi90, actualGI90, distance, scoutPlayers, teamRecord, headToHead };
+  return { MIN_MINUTES, FEATURES, per90, points90, xgi90, actualGI90, distance, scoutPlayers, teamRecord, headToHead };
 });

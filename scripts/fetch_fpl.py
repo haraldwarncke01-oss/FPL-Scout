@@ -4,6 +4,7 @@
 import json
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -96,7 +97,57 @@ def next_fixtures(fixtures):
     return by_team
 
 
-def build_snapshot(bootstrap, fixtures, history=None, updated_at=None):
+def player_minutes(player, fixtures, live):
+    """Minutes per completed fixture, including DNP=0; missing live data stays unknown."""
+    live = live or {}
+    found = {}
+    player_events = set()
+    for event_id, event in live.items():
+        entry = next((row for row in event.get("elements", []) if row["id"] == player["id"]), None)
+        if not entry:
+            continue
+        player_events.add(event_id)
+        for explanation in entry.get("explain", []):
+            stats = {row["identifier"]: row for row in explanation.get("stats", [])}
+            minute_stat = stats.get("minutes", {})
+            found[explanation["fixture"]] = {
+                "minutes": minute_stat.get("value", 0),
+                "points": sum(row.get("points", 0) for row in stats.values()),
+                "dcPoints": stats.get("defensive_contribution", {}).get("points", 0),
+                "savePoints": stats.get("saves", {}).get("points", 0),
+            }
+    joined = (player.get("team_join_date") or "")[:10]
+    logs = []
+    for fixture in fixtures:
+        if not fixture.get("finished") or not fixture.get("kickoff_time"):
+            continue
+        own_team = player["team"] in (fixture["team_h"], fixture["team_a"])
+        played = found.get(fixture["id"], {}).get("minutes", 0) > 0
+        if not played and (not own_team or (joined and fixture["kickoff_time"][:10] < joined)):
+            continue
+        known = fixture.get("event") in player_events
+        result = found.get(fixture["id"], {"minutes": 0, "points": 0, "dcPoints": 0, "savePoints": 0}) if known else {"minutes": None, "points": None}
+        home = player["team"] == fixture["team_h"] if own_team else None
+        logs.append({
+            **result, "fixture": fixture["id"], "date": fixture["kickoff_time"], "gameweek": fixture.get("event"),
+            "opponent": fixture["team_a"] if home else fixture["team_h"] if own_team else None,
+            "home": home,
+        })
+    logs.sort(key=lambda row: (row["date"], row["fixture"]), reverse=True)
+    known = [row for row in logs if row["minutes"] is not None]
+    appearances = [row for row in known if row["minutes"] > 0]
+    return {
+        "last3": logs[:3], "appearances": len(appearances), "matchesKnown": len(known),
+        "avgMinutes": round(sum(row["minutes"] for row in appearances) / len(appearances), 1) if appearances else None,
+        "avgMinutesPerMatch": round(sum(row["minutes"] for row in known) / len(known), 1) if known else None,
+        "playRate": len(appearances) / len(known) if known else None,
+        "sixtyRate": sum(row["minutes"] >= 60 for row in known) / len(known) if known else None,
+        "dcPointsPerMatch": sum(row.get("dcPoints", 0) for row in known) / len(known) if known else None,
+        "savePointsPerMatch": sum(row.get("savePoints", 0) for row in known) / len(known) if known else None,
+    }
+
+
+def build_snapshot(bootstrap, fixtures, history=None, updated_at=None, live=None):
     teams = {team["id"]: team for team in bootstrap["teams"]}
     positions = {kind["id"]: kind["singular_name_short"] for kind in bootstrap["element_types"]}
     next_by_team = next_fixtures(fixtures)
@@ -128,13 +179,17 @@ def build_snapshot(bootstrap, fixtures, history=None, updated_at=None):
             "creativity": player.get("creativity"),
             "nextChance": player.get("chance_of_playing_next_round"),
             "status": player.get("status", "u"),
+            "canSelect": player.get("can_select", True),
+            "yellowCards": player.get("yellow_cards", 0),
+            "redCards": player.get("red_cards", 0),
+            "minutesInfo": player_minutes(player, fixtures, live),
             "nextFixture": next_by_team.get(team_id),
         })
 
     current = next((event for event in bootstrap["events"] if event.get("is_current")), None)
     following = next((event for event in bootstrap["events"] if event.get("is_next")), None)
     return {
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "source": "Fantasy Premier League",
         "updatedAt": updated_at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "currentGameweek": current["id"] if current else None,
@@ -142,6 +197,15 @@ def build_snapshot(bootstrap, fixtures, history=None, updated_at=None):
         "teams": [{"id": team["id"], "name": team["name"], "shortName": team["short_name"]} for team in teams.values()],
         "players": players,
         "history": history or {"source": "OpenFootball + FPL", "seasons": [], "matches": [], "warnings": []},
+        "events": [{"id": event["id"], "deadline": event.get("deadline_time"), "finished": event.get("finished", False)} for event in bootstrap["events"]],
+        "fixtures": [{"id": f["id"], "gameweek": f.get("event"), "home": f["team_h"], "away": f["team_a"],
+            "kickoff": f.get("kickoff_time"), "finished": f.get("finished", False),
+            "homeDifficulty": f.get("team_h_difficulty"), "awayDifficulty": f.get("team_a_difficulty")} for f in fixtures],
+        "rules": {"budget": bootstrap.get("game_settings", {}).get("squad_total_spend", 1000) / 10,
+            "clubLimit": bootstrap.get("game_settings", {}).get("squad_team_limit", 3),
+            "positions": [{"position": kind["singular_name_short"], "squad": kind.get("squad_select"),
+                "minStart": kind.get("squad_min_play"), "maxStart": kind.get("squad_max_play")} for kind in bootstrap["element_types"]],
+            "chips": bootstrap.get("chips", [])},
     }
 
 
@@ -168,7 +232,18 @@ def main():
         except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
             history["warnings"].append(f"{season}: {type(error).__name__}")
     history["matches"].sort(key=lambda match: match["date"], reverse=True)
-    snapshot = build_snapshot(bootstrap, fixtures, history)
+    event_ids = sorted({f["event"] for f in fixtures if f.get("finished") and f.get("event")})
+    live = {}
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        requests = {pool.submit(get_json, f"event/{event_id}/live"): event_id for event_id in event_ids}
+        for request in as_completed(requests):
+            event_id = requests[request]
+            live[event_id] = request.result()
+    print(f"Fetched per-fixture minutes for {len(live)} gameweeks", flush=True)
+    snapshot = build_snapshot(bootstrap, fixtures, history, live=live)
+    snapshot["season"] = current_season
+    from planning import build_planning
+    snapshot["planning"] = build_planning(snapshot)
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     temporary = OUTPUT.with_suffix(".tmp")
     temporary.write_text(json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
