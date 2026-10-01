@@ -43,6 +43,99 @@
     }
     return best;
   }
+  function transferPlans(data,players,h,bank=0,saleValues={},options={}){
+    const error=validateSquad(players);if(error)return {error};
+    if(!Number.isFinite(bank)||bank<0)return {error:'Banken skal være et positivt beløb eller 0.'};
+    h=Math.min(Math.max(1,Math.floor(h)),data.planning.events.length);
+    if(!h)return {error:'Ingen kommende gameweek registreret.'};
+    const ft=Math.max(0,Math.min(5,Math.floor(options.freeTransfers??1)));
+    const maxMoves=Math.min(6,ft+(options.allowHit?1:0)),width=options.beamWidth??28;
+    const ownIds=players.map(p=>p.id),owned=new Set(ownIds),all=new Map(data.players.map(p=>[p.id,p]));
+    const price=p=>Math.round(p.price*10),sales=players.map(p=>Math.round(Number(saleValues[p.id]??p.price)*10));
+    if(sales.some(n=>!Number.isFinite(n)||n<0))return {error:'Kontrollér spillernes salgsværdier.'};
+    const bankUnits=Math.round(bank*10),events=data.planning.events.slice(0,h);
+    // Preload points; the best captain is always the highest scorer in a position's first slot.
+    const playerScores=new Map(data.players.map(p=>[p.id,events.map(gw=>points(data,p.id,gw))]));
+    const posIndex=new Map(data.players.map(p=>[p.id,positions.indexOf(p.position)]));
+    const scoreCache=new Map();let evaluated=0;
+    function squadScore(ids){
+      const key=ids.slice().sort((a,b)=>a-b).join(',');if(scoreCache.has(key))return scoreCache.get(key);
+      let sum=0;
+      for(let g=0;g<h;g++){
+        const groups=[[],[],[],[]];for(const id of ids)groups[posIndex.get(id)].push(playerScores.get(id)[g]);
+        for(const group of groups)group.sort((a,b)=>b-a);
+        const pref=groups.map(group=>{const x=[0];for(const p of group)x.push(x.at(-1)+p);return x;});
+        let best=-Infinity;
+        for(let d=3;d<=5;d++)for(let m=2;m<=5;m++){const f=10-d-m;if(f>=1&&f<=3)best=Math.max(best,pref[0][1]+pref[1][d]+pref[2][m]+pref[3][f]);}
+        sum+=best+Math.max(...groups.map(group=>group[0]));
+      }
+      evaluated++;scoreCache.set(key,sum);return sum;
+    }
+    const candidates={},minPrices={};
+    for(const pos of positions){
+      const pool=data.players.filter(p=>p.position===pos&&!owned.has(p.id)&&p.canSelect!==false&&
+        (data.planning.forecasts[p.id]?.expectedMinutesPerMatch??0)>=50&&(data.planning.forecasts[p.id]?.availability??0)>=.75);
+      const rank=p=>total(data,p.id,h),top=[...pool].sort((a,b)=>rank(b)-rank(a)||a.id-b.id).slice(0,20);
+      const value=[...pool].sort((a,b)=>rank(b)/b.price-rank(a)/a.price||a.id-b.id).slice(0,8);
+      const cheap=[...pool].sort((a,b)=>a.price-b.price||rank(b)-rank(a)||a.id-b.id).slice(0,4);
+      candidates[pos]=[...new Map([...top,...value,...cheap].map(p=>[p.id,p])).values()];
+      minPrices[pos]=pool.length?Math.min(...pool.map(price)):Infinity;
+    }
+    const initialClubs=new Map();for(const p of players)initialClubs.set(p.teamId,(initialClubs.get(p.teamId)??0)+1);
+    const baseline=squadScore(ownIds),first={ids:ownIds,moves:[],mask:0,bank:bankUnits,clubs:initialClubs,score:baseline,rank:baseline};
+    const bestByCount=[first];let beam=[first];
+    const better=(a,b)=>!b||a.score>b.score+1e-8||(Math.abs(a.score-b.score)<1e-8&&a.bank>b.bank);
+    for(let depth=1;depth<=maxMoves&&beam.length;depth++){
+      const states=new Map(),remaining=maxMoves-depth;
+      for(const state of beam)for(let slot=0;slot<15;slot++){
+        if(state.mask&(1<<slot))continue;
+        const out=players[slot];
+        for(const incoming of candidates[out.position]){
+          if(state.ids.includes(incoming.id))continue;
+          const nextBank=state.bank+sales[slot]-price(incoming),mask=state.mask|(1<<slot);
+          // Intermediate moves may need a second sale to fund them. Final plans must be affordable.
+          if(nextBank<0){
+            const savings=players.map((p,i)=>mask&(1<<i)?0:Math.max(0,sales[i]-minPrices[p.position])).sort((a,b)=>b-a);
+            if(nextBank+savings.slice(0,remaining).reduce((s,v)=>s+v,0)<0)continue;
+          }
+          const clubs=new Map(state.clubs);clubs.set(out.teamId,(clubs.get(out.teamId)??0)-1);clubs.set(incoming.teamId,(clubs.get(incoming.teamId)??0)+1);
+          let debt=0,repairable=true;
+          for(const [club,count] of clubs)if(count>3){
+            const excess=count-3;debt+=excess;
+            if(players.filter((p,i)=>p.teamId===club&&!(mask&(1<<i))).length<excess)repairable=false;
+          }
+          if(!repairable||debt>remaining)continue;
+          const ids=[...state.ids];ids[slot]=incoming.id;
+          const key=ids.slice().sort((a,b)=>a-b).join(',');if(states.has(key))continue;
+          const score=squadScore(ids),hit=4*Math.max(0,depth-ft);
+          const next={ids,moves:[...state.moves,{out:out.id,incoming:incoming.id,sale:sales[slot]/10,buy:incoming.price,
+            usesEstimatedSale:saleValues[out.id]==null}],mask,bank:nextBank,clubs,score,
+            rank:score-hit-Math.max(0,-nextBank)/10*h*.3-debt*h*.5};
+          states.set(key,next);
+          if(nextBank>=0&&debt===0&&better(next,bestByCount[depth]))bestByCount[depth]=next;
+        }
+      }
+      // Keep both affordable and funding-dependent branches in a bounded search.
+      const ranked=[...states.values()].sort((a,b)=>b.rank-a.rank||b.bank-a.bank);
+      const legal=ranked.filter(s=>s.bank>=0&&[...s.clubs.values()].every(n=>n<=3)).slice(0,Math.ceil(width/2));
+      beam=[...new Map([...legal,...ranked.slice(0,width)].map(s=>[s.ids.slice().sort((a,b)=>a-b).join(','),s])).values()].slice(0,width);
+    }
+    function describe(state){
+      const count=state.moves.length,hit=4*Math.max(0,count-ft),squad=state.ids.map(id=>all.get(id));
+      return {count,moves:state.moves,grossGain:state.score-baseline,hit,netGain:state.score-baseline-hit,
+        points:state.score,bankAfter:state.bank/10,freeTransfersLeft:Math.max(0,ft-count),
+        freeTransfersNextGW:Math.min(5,Math.max(0,ft-count)+1),squad:state.ids,
+        estimatedSales:state.moves.some(m=>m.usesEstimatedSale),
+        lineups:events.map(gw=>bestXI(data,squad,gw))};
+    }
+    const alternatives=bestByCount.filter(Boolean).map(describe);
+    let recommended=alternatives[0];
+    for(const plan of alternatives.slice(1))if(plan.netGain>=2&&(plan.netGain>recommended.netGain+1e-8||
+      (Math.abs(plan.netGain-recommended.netGain)<1e-8&&plan.count<recommended.count)))recommended=plan;
+    return {horizon:h,events,baseline,bank:bankUnits/10,freeTransfers:ft,maxMoves,recommended,alternatives,
+      beforeLineups:events.map(gw=>bestXI(data,players,gw)),evaluated,
+      method:'Bounded beam search: up to 32 targets per position, 28 branches; normal XI/captain, no future transfers or autosubs'};
+  }
   function chipAdvice(data,players,remaining={},freeTransfers=1,bank=0,saleValues={},previousFreeHit=false){
     const events=data.planning.events,gw=events[0],own=validateSquad(players)?null:players;
     const lineups=own?events.map(e=>bestXI(data,own,e)):[],byId=new Map(data.players.map(p=>[p.id,p]));
@@ -96,5 +189,5 @@
     for(const row of candidates.slice(1)){row.use=false;row.status='Alternativ';row.text+=' Kun én chip pr. GW; modellen prioriterer '+candidates[0].name+'.';}
     return advice;
   }
-  return {positions,quotas,points,total,forecast,validateSquad,bestXI,horizonScore,bestTransfer,chipAdvice};
+  return {positions,quotas,points,total,forecast,validateSquad,bestXI,horizonScore,bestTransfer,transferPlans,chipAdvice};
 });

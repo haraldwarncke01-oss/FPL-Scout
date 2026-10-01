@@ -157,6 +157,7 @@ def build_snapshot(bootstrap, fixtures, history=None, updated_at=None, live=None
         players.append({
             "id": player["id"],
             "name": player["web_name"],
+            "fullName": " ".join(filter(None, (player.get("first_name"), player.get("second_name")))) or player["web_name"],
             "teamId": team_id,
             "position": positions.get(player["element_type"], "?"),
             "price": player["now_cost"] / 10,

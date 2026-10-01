@@ -1,15 +1,15 @@
-# FPL Scout · version 3
+# FPL Scout · version 4
 
 En dansk GitHub Pages-side til FPL-scouting og holdplanlægning. Den viser tre anbefalinger på hver position, spilletid, lighed med topscorere, pointprognoser, lovlige 11/15-mandshold og betingede transfer- og chip-råd. Vælg denne GW, de næste 3 GW eller de næste 5 GW.
 
 ## Upload opdateringen til dit eksisterende GitHub-repository
 
-Du skal opdatere både projektfilerne og workflowet. Version 3 bruger SciPy til holdberegningerne; det gamle workflow installerer ikke denne afhængighed.
+Version 4 gør dit eget FPL-hold og samlede transferplaner til en central del af siden. Har du allerede workflowet fra version 3, er det uændret: upload blot de nye projektfiler. Hvis du opgraderer fra en ældre version, skal workflowet installere SciPy som vist i `.github/workflows/pages.yml`.
 
-1. Pak `fpl-scout-v3-opdatering.zip` ud. Åbn den indre `fpl-scout`-mappe.
+1. Pak `fpl-scout-v4-opdatering.zip` ud. Åbn den indre `fpl-scout`-mappe.
 2. Gå til repositoryets **Code → Add file → Upload files**. Upload indholdet: mapperne `site`, `scripts`, `tests` samt filerne `requirements.txt` og `README.md`. Upload ikke den ydre `fpl-scout`-mappe, da filerne så havner et niveau for dybt. Bevar mappestrukturen og commit ændringerne.
-3. Download den separat medfølgende `pages.yml`. På GitHub åbner du **`.github` → `workflows` → Add file → Upload files**. Upload `pages.yml` der og commit, så den eksisterende `.github/workflows/pages.yml` bliver opdateret.
-4. Hvis `.github/workflows` endnu ikke findes: **Code → Add file → Create new file**. Skriv `.github/workflows/pages.yml` i filnavnet. Åbn den downloadede `pages.yml` i en teksteditor, kopier hele indholdet til GitHub og commit.
+3. Har du allerede workflowet fra version 3, skal det ikke ændres. Hvis du opgraderer fra en ældre version: åbn **`.github` → `workflows` → `pages.yml` → Edit** på GitHub, og erstat indholdet med workflowet fra ZIP-filens `.github/workflows/pages.yml`. Den skjulte mappe kan vises med `Cmd + Shift + .` på Mac.
+4. Hvis `.github/workflows` endnu ikke findes: **Code → Add file → Create new file**. Skriv `.github/workflows/pages.yml` i filnavnet, kopier workflowets indhold ind og commit. Der er ingen nye afhængigheder i forhold til version 3.
 5. Under **Settings → Pages** skal **Source** være **GitHub Actions**. Åbn **Actions → Update FPL data and publish site**. Den seneste kørsel skal blive grøn; brug **Run workflow**, hvis nødvendigt.
 6. Find den udgivne adresse under **Settings → Pages**. Genindlæs siden, hvis browseren stadig viser den tidligere version.
 
@@ -23,11 +23,32 @@ Den første kørsel efter trin 2 kan fejle, hvis workflowet fra trin 3 endnu ikk
 - **Pointprognose:** bidrag fra spilletid, mål, assists, clean sheets, bonus, defensive bidrag, redninger og fradrag for hver af de næste fem GW.
 - **Holdforslag:** et komplet £100m-hold med 2 GKP, 5 DEF, 5 MID og 3 FWD, højst tre pr. klub og lovlig startformation. Se start-11, alle 15, kaptajn, vice og bænk. 3/5-GW-planerne beholder samme trup og roterer opstillingen.
 - **Bench Boost-hold:** særskilt optimering af alle 15 spilleres point i den kommende GW.
-- **Dit hold:** vælg 15 spillere, bank, salgsværdier, gratis transfers og tilbageværende chips. Browseren gemmer oplysningerne lokalt. Ingen konto eller FPL-login kræves.
-- **Transferforslag:** prøver én lovlig udskiftning ad gangen blandt op til 30 kandidater pr. position. Gevinsten beregnes i holdets opstillinger over den valgte periode; ved 0 gratis transfers fratrækkes 4 point. En mindre gevinst end 2 point udløser et råd om foreløbig at gemme transferen. Det er ikke en samlet plan for flere transfers.
+- **Mit FPL-hold:** indtast dine faktiske 15 spillere fordelt på positioner, bank, salgsværdier og 0–5 gratis transfers. Vælg en selvstændig 1/3/5-GW-periode til transfers. Dit hold og dine valg huskes i browseren, også når du genindlæser. Eksempelhold markeres som eksempler.
+- **Samlede transferplaner:** vurderer 0 til dit antal gratis transfers i den kommende GW, inklusive udskiftninger der frigør budget til en opgradering andetsteds. Du kan aktivt vælge at afprøve én ekstra transfer med 4 point i fradrag. Se konkrete spillere ud/ind, bank efter, netto-pointgevinst, kaptajn og effekten i hver GW. Sammenlign den bedste afprøvede plan ved forskellige antal transfers.
 - **Chips:** Triple Captain, Bench Boost, Wildcard og Free Hit med synlige betingelser. Et personligt råd kræver et komplet hold og markering af en ubrugt chip i det aktuelle sæsonvindue. Højst én chip prioriteres pr. GW.
 - **Dataexplorer:** søgning, sortering efter prognose/minutter og filtre for pris, position, klub, ejerskab, xG/xA/xGI, defensive bidrag og næste kamp.
 - **Holdhistorik:** clean sheets hjemme/ude, mål for/imod og op til seks indbyrdes opgør med stikprøvestørrelse og sæsoner.
+
+## Brug dit faktiske hold
+
+1. Åbn **Mit FPL-hold & transfers** øverst på siden.
+2. Søg efter dine spillere. Positionsfilter og tællere hjælper dig med at vælge 2 målmænd, 5 forsvarere, 5 midtbane og 3 angribere. Samme spiller kan kun vælges én gang, og der tillades højst tre fra en klub.
+3. Skriv bank i £m, fx `1.5`, og hvor mange gratis transfers du faktisk har tilbage. Vælg, om spillere skal vurderes over denne GW, de næste 3 eller de næste 5 GW.
+4. Sæt spillernes **salgsværdier fra FPL** i felterne ved holdet. Tomme felter bruger købsprisen som estimat. Salgsværdien kan være lavere end købsprisen, så den er nødvendig for præcis økonomi.
+5. Tryk **Find transferforslag**. Planen viser ændringer i kommende GW og forventet effekt over din valgte periode. Vælg et andet antal transfers i resultatets sammenligning for at se alternativer.
+6. Gennemfør selv de samlede transfers i FPL og opdatér derefter dit hold her. Siden foretager ingen ændringer på din FPL-konto.
+
+Forslagene genberegnes, når du trykker på knappen. Ændrer du hold, økonomi eller periode, fjernes de gamle forslag. Dit hold gemmes lokalt; chips markeres særskilt og kan være et alternativ til almindelige transfers.
+
+### Hvordan transferplanen beregnes
+
+Kandidater skal have mindst 50 forventede min/kamp og 75% tilgængelighed. Pr. position bruges op til 20 med høj prognose, 8 med godt forhold mellem prognose og pris og 4 billige muligheder; overlap fjernes. En begrænset beam search beholder op til 28 lovende kombinationer på hvert trin. Søgetiden er normalt kort, og beregningen kører i en web worker, så siden fortsat kan bruges.
+
+Vi afprøver både enkeltstående udskiftninger og kombinationer. En mellemregning må kræve en ekstra salgshandel for at frigøre penge eller plads i klubkvoten; hver færdig plan skal være betalelig samlet og overholde positioner, spillerunikhed og højst tre pr. klub. Alle udskiftninger sker i samme kommende GW. Spillerpriser og bank regnes i tiendedele af £m for at undgå afrundingsfejl.
+
+For hver plan vælger vi en lovlig start-11 og kaptajn i hver GW i perioden. Nettogevinst = nye holdpoint − holdpoint uden transfers − 4 × antal transfers ud over de gratis. Fradraget trækkes én gang i kommende GW. Ved under 2 forventede point i nettogevinst anbefales 0 transfers. De bedste afprøvede planer med 0, 1, 2 osv. vises som alternativer; algoritmen garanterer ikke en globalt optimal løsning.
+
+Gratis transfers spares ikke automatisk for deres fremtidige værdi i modellen. Priser holdes faste, og der simuleres ingen fremtidige transfers eller autosubs. Planen beregner normal FPL-scoring med dobbelt kaptajn; chips vurderes i deres egen sektion. Tidligere data og pointprognoser er usikre, og skadesoplysninger bør kontrolleres tæt på deadline.
 
 ## Datakilder
 
@@ -98,7 +119,8 @@ site/index.html               Sideindhold
 site/styles.css               Design og mobilvisning
 site/analysis.js              Lighed og kamphistorik
 site/planner.js               Opstillinger, transfers og chip-regler
-site/planning-ui.js           Holdplanlægningens brugerflade
+site/planning-ui.js           Dit hold, transfers og holdplanlægning
+site/transfer-worker.js        Transferkombinationer i baggrunden
 site/app.js                   Filtre, sortering og spilleranalyse
 site/data/fpl.json            Dataudtræk med schemaVersion 3
 ```
